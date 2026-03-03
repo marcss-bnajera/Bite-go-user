@@ -1,11 +1,12 @@
 import Restaurant from "./restaurants-model.js";
+import Product from "../products/products-model.js";
 
 /**
  * GET 
  */
 export const getRestaurants = async (req, res) => {
     try {
-        const { page = 1, limit = 10, categoria, search } = req.query;
+        const { page = 1, limit = 10, categoria, search, categoria_producto } = req.query;
         const safePage = Math.max(1, parseInt(page) || 1);
         const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 100);
 
@@ -16,6 +17,14 @@ export const getRestaurants = async (req, res) => {
         if (search) {
             const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             query.nombre = { $regex: escaped, $options: "i" };
+        }
+
+        if (categoria_producto) {
+            const restaurantIds = await Product.distinct("id_restaurante", {
+                activo: true,
+                categoria: categoria_producto
+            });
+            query._id = { $in: restaurantIds };
         }
 
         const [restaurants, total] = await Promise.all([
