@@ -7,7 +7,6 @@ export const getCategoriesByUser = async (req, res) => {
     try {
         const { restaurante } = req.query;
 
-        // El usuario debe decir de cual restaurante quiere ver el menú
         if (!restaurante) {
             return res.status(400).json({
                 success: false,
@@ -17,11 +16,11 @@ export const getCategoriesByUser = async (req, res) => {
 
         const query = {
             id_restaurante: restaurante,
-            activo: true // El usuario solo ve lo que está activo
+            activo: true
         };
 
         const categories = await Category.find(query)
-            .sort({ nombre: 1 }); // Orden alfabético para el cliente
+            .sort({ nombre: 1 });
 
         res.status(200).json({
             success: true,
@@ -32,7 +31,26 @@ export const getCategoriesByUser = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al consultar el catálogo",
-           
+        });
+    }
+};
+
+/**
+ * GET - Obtener todas las categorías únicas de todos los restaurantes
+ */
+export const getAllCategories = async (req, res) => {
+    try {
+        const categories = await Category.distinct("nombre", { activo: true });
+
+        res.status(200).json({
+            success: true,
+            total: categories.length,
+            categories: categories.sort()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error al obtener las categorías"
         });
     }
 };
