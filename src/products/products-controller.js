@@ -55,35 +55,60 @@ export const getProductsByRestaurant = async (req, res) => {
                 .sort({ createdAt: -1 }),
             Product.countDocuments(query)
         ]);
+        /* GET - Menú del Restaurante para el Usuario
+        */
+        export const getMenuUser = async (req, res) => {
+            try {
+                const { id_restaurante } = req.params;
 
-        res.status(200).json({
-            success: true,
-            total,
-            totalPages: Math.ceil(total / limit),
-            currentPage: parseInt(page),
-            products
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Error al obtener productos", error: error.message });
-    }
-};
+                // Buscamos productos que el Admin marcó como activos y disponibles
+                const menu = await Product.find({
+                    id_restaurante,
+                    activo: true,
+                    disponibilidad: true
+                }).select("nombre descripcion precio categoria foto_url variaciones");
 
-/**
- * GET - Ver detalle de un producto
- */
-export const getProductById = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const product = await Product.findOne({ _id: id, activo: true })
-            .select('-receta') // Ocultamos receta
-            .populate('id_restaurante', 'nombre direccion');
+                res.status(200).json({
+                    success: true,
+                    msg: "Menú cargado exitosamente",
+                    total: menu.length,
+                    menu
+                });
+            } catch (error) {
+                res.status(500).json({ success: false, error: error.message });
+            }
+        };
 
-        if (!product) {
-            return res.status(404).json({ success: false, message: "Producto no encontrado o inactivo" });
+        /**
+         * GET - Ver detalle de un producto
+         * GET - Buscar producto por nombre en todo el sistema (Exploración)
+         */
+        export const searchProductsUser = async (req, res) => {
+            try {
+                const { id } = req.params;
+                const product = await Product.findOne({ _id: id, activo: true })
+                    .select('-receta') // Ocultamos receta
+                    .populate('id_restaurante', 'nombre direccion');
+
+                if (!product) {
+                    return res.status(404).json({ success: false, message: "Producto no encontrado o inactivo" });
+                }
+
+                const { q } = req.query;
+                if (!q) return res.status(400).json({ message: "Debes enviar un término de búsqueda" });
+
+                const products = await Product.find({
+                    nombre: { $regex: q, $options: "i" },
+                    activo: true,
+                    disponibilidad: true
+                })
+                    .limit(20)
+                    .populate("id_restaurante", "nombre");
+
+                res.status(200).json({ success: true, products });
+            } catch (error) {
+                res.status(500).json({ success: false, error: error.message });
+            }
         }
-
-        res.status(200).json({ success: true, product });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Error en el servidor", error: error.message });
     }
 };

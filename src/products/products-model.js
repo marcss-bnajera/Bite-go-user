@@ -1,69 +1,25 @@
 import { Schema, model } from 'mongoose';
 
-const recetaSchema = new Schema({
-    nombre_insumo: {
-        type: String,
-        required: [true, 'El nombre del insumo es obligatorio'],
-        trim: true
-    },
-    cantidad_requerida: {
-        type: Number,
-        required: [true, 'La cantidad es obligatoria'],
-        min: [0, 'La cantidad no puede ser negativa']
-    }
-}, {
-    _id: true
+const variacionDisponibleSchema = new Schema({
+    nombre: { type: String, required: true },
+    opciones: [String],
+    es_extra: { type: Boolean, default: false },
+    precio_adicional: { type: Number, default: 0 }
 });
 
 const productSchema = new Schema({
-    id_restaurante: {
-        type: Schema.Types.ObjectId,
-        ref: 'Restaurant',
-        required: [true, 'El restaurante es obligatorio']
-    },
-    nombre: {
-        type: String,
-        required: [true, 'El nombre del producto es obligatorio'],
-        trim: true
-    },
-    descripcion: {
-        type: String,
-        trim: true
-    },
+    id_restaurante: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },
+    nombre: { type: String, required: true },
+    descripcion: { type: String },
     categoria: {
         type: String,
-        required: [true, 'La categoría es obligatoria'],
-        enum: ['Entradas', 'Platos', 'Bebidas', 'Postres', 'Otros'],
-        default: 'Platos'
+        enum: ['Entradas', 'Platos', 'Bebidas', 'Postres', 'Otros']
     },
-    precio: {
-        type: Number,
-        required: [true, 'El precio es obligatorio'],
-        min: [0, 'El precio no puede ser negativo']
-    },
-    disponibilidad: {
-        type: Boolean,
-        default: true
-    },
-    foto_url: {
-        type: [String],
-        default: []
-    },
-    receta: [recetaSchema],
-    activo: {
-        type: Boolean,
-        default: true
-    }
-}, {
-    timestamps: true,
-    toJSON: {
-        transform: function (doc, ret) {
-            delete ret.__v;
-            return ret;
-        }
-    }
-});
-
-productSchema.index({ id_restaurante: 1, activo: 1 });
+    precio: { type: Number, required: true },
+    disponibilidad: { type: Boolean, default: true },
+    foto_url: { type: [String], default: [] },
+    variaciones_disponibles: [variacionDisponibleSchema],
+    activo: { type: Boolean, default: true }
+}, { timestamps: true });
 
 export default model('Product', productSchema);
