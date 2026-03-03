@@ -1,17 +1,17 @@
 
 import { Router } from 'express';
+import { validateJWT } from "../../middlewares/validate-jwt.js";
+
 import {
     getOrdersByUser,
     createOrder,
-    updateOrder,
     deleteOrder
 } from './orders-controller.js';
 
 const router = Router();
 
-router.get('/user/:id_user', getOrdersByUser);
-router.post('/', createOrder);
-router.put('/:id', updateOrder);
-router.delete('/:id', deleteOrder);
+router.get('/history/:id_user', validateJWT, getOrdersByUser);
+router.post('/', validateJWT, createOrder);
+router.delete('/:id', validateJWT, deleteOrder);
 
 export default router;

@@ -44,6 +44,14 @@ export const updateUser = async (req, res) => {
         const { id } = req.params;
         const { password, email, ...data } = req.body;
 
+        // Validamos que el usuario que está intentando actualizar sea el mismo que está intentando actualizar
+        if (req.user.uid !== id) {
+            return res.status(403).json({
+                success: false,
+                message: "No tienes permiso para actualizar un perfil que no es el tuyo."
+            });
+        }
+
         if (password) {
             const salt = bcrypt.genSaltSync(10);
             data.password = bcrypt.hashSync(password, salt);
