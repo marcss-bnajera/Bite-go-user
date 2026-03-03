@@ -6,8 +6,6 @@ import Product from "./products-model.js";
 export const getProducts = async (req, res) => {
     try {
         const { page = 1, limit = 10, search } = req.query;
-
-        // Regla: Solo productos activos y disponibles
         const query = { activo: true, disponibilidad: true };
 
         if (search) {
@@ -16,7 +14,7 @@ export const getProducts = async (req, res) => {
 
         const [products, total] = await Promise.all([
             Product.find(query)
-                .select('-receta') // Oculta los ingredientes/receta al cliente
+                .select('-receta')
                 .skip((page - 1) * limit)
                 .limit(parseInt(limit))
                 .sort({ createdAt: -1 })
@@ -44,71 +42,101 @@ export const getProductsByRestaurant = async (req, res) => {
         const { id_restaurante } = req.params;
         const { page = 1, limit = 10 } = req.query;
 
-        // Regla: Solo activos y disponibles de ESE restaurante
         const query = { id_restaurante, activo: true, disponibilidad: true };
 
         const [products, total] = await Promise.all([
             Product.find(query)
-                .select('-receta') // Ocultamos receta
+                .select('-receta')
                 .skip((page - 1) * limit)
                 .limit(parseInt(limit))
                 .sort({ createdAt: -1 }),
             Product.countDocuments(query)
         ]);
-        /* GET - Menú del Restaurante para el Usuario
-        */
-        export const getMenuUser = async (req, res) => {
-            try {
-                const { id_restaurante } = req.params;
 
-                // Buscamos productos que el Admin marcó como activos y disponibles
-                const menu = await Product.find({
-                    id_restaurante,
-                    activo: true,
-                    disponibilidad: true
-                }).select("nombre descripcion precio categoria foto_url variaciones");
+        res.status(200).json({
+            success: true,
+            total,
+            products
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
 
-                res.status(200).json({
-                    success: true,
-                    msg: "Menú cargado exitosamente",
-                    total: menu.length,
-                    menu
-                });
-            } catch (error) {
-                res.status(500).json({ success: false, error: error.message });
-            }
-        };
+/**
+ * GET - Menú del Restaurante para el Usuario
+ */
+export const getMenuForUser = async (req, res) => {
+    try {
+        const { id_restaurante } = req.params;
 
-        /**
-         * GET - Ver detalle de un producto
-         * GET - Buscar producto por nombre en todo el sistema (Exploración)
-         */
-        export const searchProductsUser = async (req, res) => {
-            try {
-                const { id } = req.params;
-                const product = await Product.findOne({ _id: id, activo: true })
-                    .select('-receta') // Ocultamos receta
-                    .populate('id_restaurante', 'nombre direccion');
+        const menu = await Product.find({
+            id_restaurante,
+            activo: true,
+            disponibilidad: true
+        }).select("nombre descripcion precio categoria foto_url variaciones");
 
-                if (!product) {
-                    return res.status(404).json({ success: false, message: "Producto no encontrado o inactivo" });
-                }
+        res.status(200).json({
+            success: true,
+            msg: "Menú cargado exitosamente",
+            total: menu.length,
+            menu
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
 
-                const { q } = req.query;
-                if (!q) return res.status(400).json({ message: "Debes enviar un término de búsqueda" });
+/**
+ * GET - Buscar producto por nombre
+ */
+export const searchProductsUser = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) return res.status(400).json({ message: "Debes enviar un término de búsqueda" });
 
-                const products = await Product.find({
-                    nombre: { $regex: q, $options: "i" },
-                    activo: true,
-                    disponibilidad: true
-                })
-                    .limit(20)
-                    .populate("id_restaurante", "nombre");
+        const products = await Product.find({
+            nombre: { $regex: q, $options: "i" },
+            activo: true,
+            disponibilidad: true
+        })
+            .limit(20)
+            .populate("id_restaurante", "nombre");
 
-                res.status(200).json({ success: true, products });
-            } catch (error) {
-                res.status(500).json({ success: false, error: error.message });
-            }
+        res.status(200).json({ success: true, products });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * GET - Obtener un producto específico por su ID
+ */
+export const getProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Buscamos el producto por ID, pero aseguramos que esté activo
+        const product = await Product.findOne({ _id: id, activo: true })
+            .select('-receta') // No mostramos la receta al usuario final
+            .populate('id_restaurante', 'nombre direccion categoria_gastronomica');
+
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Producto no encontrado o no está disponible actualmente"
+            });
         }
+
+        res.status(200).json({
+            success: true,
+            product
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Error al obtener el detalle del producto",
+            error: error.message
+        });
     }
 };
