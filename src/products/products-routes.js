@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import {
     getMenuForUser,
-    searchProductsUser,
-    getProductById
+    searchProductsUser
 } from './products-controller.js';
 
 const router = Router();
@@ -12,8 +11,5 @@ router.get('/menu/:id_restaurante', getMenuForUser);
 
 // Buscar comida por nombre (Ej: "Pizza")
 router.get('/search', searchProductsUser);
-
-// Ver detalle de un plato específico
-router.get('/:id', getProductById);
 
 export default router;
