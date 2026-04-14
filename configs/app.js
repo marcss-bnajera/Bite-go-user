@@ -18,6 +18,8 @@ import productsRoutes from "../src/products/products-routes.js";
 import ordersRoutes from "../src/orders/orders-routes.js";
 import categoriesRoutes from "../src/categories/categories-routes.js";
 import itemsRoutes from "../src/items/items-routes.js";
+import swaggerUI from "swagger-ui-express";
+import swaggerJSDoc from "swagger-jsdoc";
 
 const BASE_URL = '/bite-and-go/v1';
 
@@ -45,6 +47,27 @@ const routes = (app) => {
     app.use(`${BASE_URL}/items`, itemsRoutes);
 }
 
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: "Bite&Go API-User",
+            version: '1.0.0',
+        },
+        servers: [
+            {
+                url: "http://localhost:3001/bite-and-go/v1",
+            }
+        ],
+    },
+    apis: [
+        './src/**/*.js',
+        './app.js'
+    ],
+};
+
+const swaggerDocs = swaggerJSDoc(swaggerOptions);
+
 // Función para iniciar el servidor
 const initServer = async (app) => {
     app = express();
@@ -55,6 +78,8 @@ const initServer = async (app) => {
         dbConnection();
         middlewares(app);
         routes(app);
+
+        app.use('/bite-and-go/v1/api-docs', swaggerUI.serve, swaggerUI.setup(swaggerDocs));
 
         app.listen(PORT, () => {
             console.log(`[Bite&Go User Service] iniciado en el puerto ${PORT}`);
