@@ -32,7 +32,7 @@ export const getCategoriesByUser = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al consultar el catálogo",
-            error: error.message
+           
         });
     }
 };

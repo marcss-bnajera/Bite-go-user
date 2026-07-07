@@ -31,13 +31,15 @@ export const getOrdersByUser = async (req, res) => {
         // SEGURIDAD: Obtenemos el ID del token (req.user.uid)
         const id_user = req.user.uid;
         const { page = 1, limit = 10 } = req.query;
+        const safePage = Math.max(1, parseInt(page) || 1);
+        const safeLimit = Math.min(Math.max(1, parseInt(limit) || 10), 100);
 
         const query = { id_usuario_cliente: id_user, activo: true };
 
         const [orders, total] = await Promise.all([
             Order.find(query)
-                .skip((page - 1) * limit)
-                .limit(parseInt(limit))
+                .skip((safePage - 1) * safeLimit)
+                .limit(safeLimit)
                 .sort({ createdAt: -1 })
                 .populate('id_restaurante', 'nombre'),
             Order.countDocuments(query)
@@ -46,15 +48,15 @@ export const getOrdersByUser = async (req, res) => {
         res.status(200).json({
             success: true,
             total,
-            totalPages: Math.ceil(total / limit),
-            currentPage: parseInt(page),
+            totalPages: Math.ceil(total / safeLimit),
+            currentPage: safePage,
             orders
         });
     } catch (error) {
         res.status(500).json({
             success: false,
             message: "Error al obtener tu historial de pedidos",
-            error: error.message
+           
         });
     }
 };
@@ -131,7 +133,7 @@ export const createOrder = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al crear pedido con asignación",
-            error: error.message
+           
         });
     }
 };
@@ -142,17 +144,23 @@ export const createOrder = async (req, res) => {
 export const updateOrder = async (req, res) => {
     try {
         const { id } = req.params;
-        const data = req.body;
 
-        // Evitamos que por UPDATE cambien el usuario dueño o el total arbitrariamente
-        delete data.id_usuario_cliente;
+        // Solo permitir campos editables por el cliente (prevenir mass assignment)
+        const { notas } = req.body;
+        const data = { notas };
+        Object.keys(data).forEach(k => data[k] === undefined && delete data[k]);
 
-        const order = await Order.findByIdAndUpdate(id, data, { new: true });
+        // Verificar que la orden pertenece al usuario
+        const order = await Order.findOneAndUpdate(
+            { _id: id, id_usuario_cliente: req.user.uid, activo: true },
+            data,
+            { new: true, runValidators: true }
+        );
         if (!order) return res.status(404).json({ success: false, message: "Pedido no encontrado" });
 
         res.status(200).json({ success: true, message: "Pedido actualizado", order });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Error al actualizar pedido", error: error.message });
+        res.status(500).json({ success: false, message: "Error al actualizar pedido" });
     }
 };
 
@@ -190,6 +198,6 @@ export const deleteOrder = async (req, res) => {
             message: "Pedido cancelado correctamente"
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: "Error al cancelar pedido", error: error.message });
+        res.status(500).json({ success: false, message: "Error al cancelar pedido" });
     }
 };

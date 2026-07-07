@@ -45,8 +45,7 @@ const itemPedidoSchema = new Schema({
  */
 const orderSchema = new Schema({
     id_usuario_cliente: {
-        type: Schema.Types.ObjectId,
-        ref: 'User',
+        type: String,
         required: [true, 'El cliente es obligatorio']
     },
     id_restaurante: {
@@ -65,6 +64,12 @@ const orderSchema = new Schema({
         default: null
     },
     items: [itemPedidoSchema],
+
+    notas: {
+        type: String,
+        trim: true,
+        default: ""
+    },
 
     total: {
         type: Number,

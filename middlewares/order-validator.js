@@ -2,13 +2,10 @@ import { body, param } from 'express-validator';
 import { checkValidators } from './check-validators.js';
 
 /**
- * Validaciones para crear un pedido
+ * Validaciones para crear un pedido (user-service)
+ * Nota: id_usuario_cliente viene del token, no se valida en body
  */
 export const validateCreateOrder = [
-    body('id_usuario_cliente')
-        .notEmpty().withMessage('El ID del cliente es obligatorio')
-        .isMongoId().withMessage('ID de cliente no válido'),
-
     body('id_restaurante')
         .notEmpty().withMessage('El ID del restaurante es obligatorio')
         .isMongoId().withMessage('ID de restaurante no válido'),
@@ -29,17 +26,6 @@ export const validateCreateOrder = [
     body('items.*.cantidad')
         .isInt({ min: 1 })
         .withMessage('La cantidad mínima por producto es 1'),
-
-    body('items.*.nombre_historico')
-        .notEmpty().withMessage('El nombre histórico es obligatorio para auditoría'),
-
-    body('items.*.precio_historico')
-        .isFloat({ min: 0 })
-        .withMessage('El precio histórico debe ser un número positivo'),
-
-    body('total')
-        .isFloat({ min: 0 })
-        .withMessage('El total debe ser un número positivo'),
 
     checkValidators
 ];

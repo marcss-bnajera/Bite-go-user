@@ -33,8 +33,7 @@ export const isOrderEditable = async (req, res, next) => {
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: "Error al validar el estado de la orden",
-            error: error.message
+            message: "Error al validar el estado de la orden"
         });
     }
 };

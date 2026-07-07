@@ -1,4 +1,4 @@
-`use strict`;
+'use strict';
 
 // Importaciones
 import express from "express";
@@ -18,6 +18,7 @@ import productsRoutes from "../src/products/products-routes.js";
 import ordersRoutes from "../src/orders/orders-routes.js";
 import categoriesRoutes from "../src/categories/categories-routes.js";
 import itemsRoutes from "../src/items/items-routes.js";
+import { errorHandler } from '../middlewares/handle-errors.js';
 
 const BASE_URL = '/bite-and-go/v1';
 
@@ -43,6 +44,7 @@ const routes = (app) => {
     app.use(`${BASE_URL}/orders`, ordersRoutes);
     app.use(`${BASE_URL}/categories`, categoriesRoutes);
     app.use(`${BASE_URL}/items`, itemsRoutes);
+    app.use(errorHandler);
 }
 
 

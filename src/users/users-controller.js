@@ -1,22 +1,30 @@
 import User from "./users-model.js";
-import bcrypt from "bcryptjs";
 
 /**
- * POST - Registro de usuario
+ * POST - Registro de usuario (solo clientes)
  */
 export const register = async (req, res) => {
     try {
-        // 1. Extraemos password y el resto de datos
         const { password, ...data } = req.body;
 
-        // 2. Encriptar contraseña
-        const salt = bcrypt.genSaltSync(10);
-        const hashedPassword = bcrypt.hashSync(password, salt);
+        if (!password || password.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: "La contraseña debe tener al menos 8 caracteres"
+            });
+        }
 
-        // 3. Creamos el usuario con los nombres de campos en ESPAÑOL
+        const existingUser = await User.findOne({ email: data.email });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: "El correo ya está registrado"
+            });
+        }
+
         const user = new User({
             ...data,
-            password: hashedPassword,
+            password,
             rol: "Cliente",
             activo: true
         });
@@ -31,20 +39,19 @@ export const register = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al registrar usuario",
-            error: error.message
+           
         });
     }
 };
 
 /**
- * PUT 
+ * PUT - Actualizar perfil propio
  */
 export const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
-        const { password, email, ...data } = req.body;
+        const { password, email, rol, ...data } = req.body;
 
-        // Validamos que el usuario que está intentando actualizar sea el mismo que está intentando actualizar
         if (req.user.uid !== id) {
             return res.status(403).json({
                 success: false,
@@ -53,11 +60,19 @@ export const updateUser = async (req, res) => {
         }
 
         if (password) {
-            const salt = bcrypt.genSaltSync(10);
-            data.password = bcrypt.hashSync(password, salt);
+            if (password.length < 8) {
+                return res.status(400).json({
+                    success: false,
+                    message: "La contraseña debe tener al menos 8 caracteres"
+                });
+            }
+            data.password = password;
         }
 
-        const user = await User.findByIdAndUpdate(id, data, { new: true });
+        const allowedFields = { nombre: data.nombre, telefono: data.telefono, direccion: data.direccion, dpi: data.dpi };
+        Object.keys(allowedFields).forEach(k => allowedFields[k] === undefined && delete allowedFields[k]);
+
+        const user = await User.findByIdAndUpdate(id, allowedFields, { new: true });
 
         if (!user) return res.status(404).json({
             success: false,
@@ -73,46 +88,7 @@ export const updateUser = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al actualizar",
-            error: error.message
-        });
-    }
-};
-/**
- * POST - Login (Básico, sin tokens por ahora)
- */
-export const login = async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        // 1. Buscar al usuario por email
-        const user = await User.findOne({ email, activo: true });
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "El correo no está registrado o la cuenta está desactivada"
-            });
-        }
-
-        // 2. Comparar la contraseña encriptada
-        const validPassword = bcrypt.compareSync(password, user.password);
-        if (!validPassword) {
-            return res.status(400).json({
-                success: false,
-                message: "Contraseña incorrecta"
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: `Bienvenido de nuevo, ${user.nombre}`,
-            user
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Error en el servidor durante el login",
-            error: error.message
+           
         });
     }
 };
@@ -140,7 +116,7 @@ export const getUserById = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al obtener el perfil",
-            error: error.message
+           
         });
     }
 };

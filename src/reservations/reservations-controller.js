@@ -7,10 +7,10 @@ import Restaurant from "../restaurants/restaurants-model.js";
  */
 export const createReservation = async (req, res) => {
     try {
-        const { restaurantId, reservationDate, peopleCount } = req.body;
-        const userId = req.user.uid;
+        const { id_restaurante, fecha_reserva, cantidad_personas } = req.body;
+        const id_usuario = req.user.uid;
 
-        const dateToReserve = new Date(reservationDate);
+        const dateToReserve = new Date(fecha_reserva);
         if (dateToReserve < new Date()) {
             return res.status(400).json({
                 success: false,
@@ -18,7 +18,7 @@ export const createReservation = async (req, res) => {
             });
         }
 
-        const restaurant = await Restaurant.findOne({ _id: restaurantId, activo: true });
+        const restaurant = await Restaurant.findOne({ _id: id_restaurante, activo: true });
         if (!restaurant) {
             return res.status(404).json({
                 success: false,
@@ -27,7 +27,7 @@ export const createReservation = async (req, res) => {
         }
 
         const table = restaurant.mesas.find(m =>
-            m.estado === 'Disponible' && m.capacidad >= peopleCount
+            m.estado === 'Disponible' && m.capacidad >= cantidad_personas
         );
 
         if (!table) {
@@ -38,18 +38,18 @@ export const createReservation = async (req, res) => {
         }
 
         const newReservation = new Reservation({
-            userId,
-            restaurantId,
-            tableId: table._id,
-            reservationDate: dateToReserve,
-            peopleCount,
-            status: 'Confirmed'
+            id_usuario,
+            id_restaurante,
+            id_mesa: table._id,
+            fecha_reserva: dateToReserve,
+            cantidad_personas,
+            estado: 'Confirmada'
         });
 
         await newReservation.save();
 
         await Restaurant.updateOne(
-            { "_id": restaurantId, "mesas._id": table._id },
+            { "_id": id_restaurante, "mesas._id": table._id },
             { "$set": { "mesas.$.estado": "Reservada" } }
         );
 
@@ -63,7 +63,7 @@ export const createReservation = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al procesar la reservación",
-            error: error.message
+           
         });
     }
 };
@@ -73,10 +73,10 @@ export const createReservation = async (req, res) => {
  */
 export const getMyReservations = async (req, res) => {
     try {
-        const userId = req.user.uid;
-        const reservations = await Reservation.find({ userId, active: true })
-            .populate('restaurantId', 'nombre direccion')
-            .sort({ reservationDate: 1 });
+        const id_usuario = req.user.uid;
+        const reservations = await Reservation.find({ id_usuario, activo: true })
+            .populate('id_restaurante', 'nombre direccion')
+            .sort({ fecha_reserva: 1 });
 
         res.status(200).json({
             success: true,
@@ -87,22 +87,20 @@ export const getMyReservations = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al obtener tu historial",
-            error: error.message
+           
         });
     }
 };
 
-// CAMBIO: Se agregó la función completa para cancelar (DELETE lógico)
 /**
  * DELETE - Cancelar una reservación y liberar la mesa
  */
 export const deleteReservation = async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = req.user.uid;
+        const id_usuario = req.user.uid;
 
-        // 1. Buscar la reservación y verificar que pertenezca al usuario
-        const reservation = await Reservation.findOne({ _id: id, userId, active: true });
+        const reservation = await Reservation.findOne({ _id: id, id_usuario, activo: true });
 
         if (!reservation) {
             return res.status(404).json({
@@ -111,14 +109,12 @@ export const deleteReservation = async (req, res) => {
             });
         }
 
-        // 2. Cambiar estado de la reservación (Cancelado lógico)
-        reservation.active = false;
-        reservation.status = 'Cancelled';
+        reservation.activo = false;
+        reservation.estado = 'Cancelada';
         await reservation.save();
 
-        // 3. LIBERAR LA MESA: Volver a poner la mesa como 'Disponible'
         await Restaurant.updateOne(
-            { "_id": reservation.restaurantId, "mesas._id": reservation.tableId },
+            { "_id": reservation.id_restaurante, "mesas._id": reservation.id_mesa },
             { "$set": { "mesas.$.estado": "Disponible" } }
         );
 
@@ -130,7 +126,7 @@ export const deleteReservation = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al cancelar la reservación",
-            error: error.message
+           
         });
     }
 };
