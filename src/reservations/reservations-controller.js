@@ -15,7 +15,7 @@ const RESERVATION_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 horas
  */
 export const createReservation = async (req, res) => {
     try {
-        const { id_restaurante, fecha_reserva, cantidad_personas } = req.body;
+        const { id_restaurante, fecha_reserva, cantidad_personas, id_sucursal } = req.body;
         const id_usuario = req.user.uid;
 
         const dateToReserve = new Date(fecha_reserva);
@@ -34,7 +34,44 @@ export const createReservation = async (req, res) => {
             });
         }
 
-        const candidatas = restaurant.mesas
+        let horarios = restaurant.horarios_atencion;
+        if (id_sucursal && restaurant.sucursales?.length) {
+            const suc = restaurant.sucursales.id(id_sucursal);
+            if (suc?.horarios_atencion) horarios = suc.horarios_atencion;
+        }
+        if (horarios && horarios.includes(" - ")) {
+            const [, cierreStr] = horarios.split(" - ");
+            const [cierreH, cierreM] = cierreStr.split(":").map(Number);
+            const cierreUTC_h = (cierreH + 6) % 24;
+            const cierreDate = new Date(dateToReserve);
+            cierreDate.setUTCHours(cierreUTC_h, cierreM, 0, 0);
+            if (cierreDate <= dateToReserve) {
+                cierreDate.setUTCDate(cierreDate.getUTCDate() + 1);
+            }
+            cierreDate.setUTCMinutes(cierreDate.getUTCMinutes() - 90);
+            if (dateToReserve > cierreDate) {
+                return res.status(400).json({
+                    success: false,
+                    message: `La reserva debe ser al menos 1.5 horas antes del cierre (${cierreStr})`
+                });
+            }
+        }
+
+        let mesasBase;
+        if (id_sucursal) {
+            const sucursal = restaurant.sucursales.id(id_sucursal);
+            if (!sucursal) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Sucursal no encontrada."
+                });
+            }
+            mesasBase = sucursal.mesas;
+        } else {
+            mesasBase = restaurant.mesas;
+        }
+
+        const candidatas = mesasBase
             .filter(m => m.estado !== 'Mantenimiento' && m.capacidad >= cantidad_personas)
             .sort((a, b) => a.capacidad - b.capacidad);
 
@@ -48,12 +85,15 @@ export const createReservation = async (req, res) => {
         const ventanaInicio = new Date(dateToReserve.getTime() - RESERVATION_WINDOW_MS);
         const ventanaFin = new Date(dateToReserve.getTime() + RESERVATION_WINDOW_MS);
 
-        const reservasSolapadas = await Reservation.find({
+        const querySolapamiento = {
             id_restaurante,
             activo: true,
             estado: { $in: ['Confirmada', 'Atendida'] },
             fecha_reserva: { $gte: ventanaInicio, $lte: ventanaFin }
-        }).select('id_mesa');
+        };
+        if (id_sucursal) querySolapamiento.id_sucursal = id_sucursal;
+
+        const reservasSolapadas = await Reservation.find(querySolapamiento).select('id_mesa');
 
         const mesasOcupadas = new Set(reservasSolapadas.map(r => String(r.id_mesa)));
         const mesaLibre = candidatas.find(m => !mesasOcupadas.has(String(m._id)));
@@ -68,16 +108,14 @@ export const createReservation = async (req, res) => {
         const newReservation = await Reservation.create({
             id_usuario,
             id_restaurante,
+            id_sucursal: id_sucursal || '',
             id_mesa: mesaLibre._id,
             fecha_reserva: dateToReserve,
             cantidad_personas,
             estado: 'Confirmada'
         });
 
-        // Re-chequeo tras escribir: si otra reservación concurrente tomó la misma mesa
-        // y horario antes que esta, la más nueva pierde (evita doble reserva sin
-        // depender de transacciones de Mongo, que no siempre están disponibles).
-        const conflictoPrevio = await Reservation.findOne({
+        const queryConflicto = {
             _id: { $ne: newReservation._id },
             id_restaurante,
             id_mesa: mesaLibre._id,
@@ -85,7 +123,10 @@ export const createReservation = async (req, res) => {
             estado: { $in: ['Confirmada', 'Atendida'] },
             fecha_reserva: { $gte: ventanaInicio, $lte: ventanaFin },
             createdAt: { $lt: newReservation.createdAt }
-        });
+        };
+        if (id_sucursal) queryConflicto.id_sucursal = id_sucursal;
+
+        const conflictoPrevio = await Reservation.findOne(queryConflicto);
 
         if (conflictoPrevio) {
             await Reservation.findByIdAndDelete(newReservation._id);
@@ -94,6 +135,17 @@ export const createReservation = async (req, res) => {
                 message: "Esa mesa acaba de ser reservada por otro cliente para ese horario. Intenta con otro horario."
             });
         }
+
+        const updateQuery = id_sucursal
+            ? { _id: id_restaurante, "sucursales._id": id_sucursal, "sucursales.mesas._id": mesaLibre._id }
+            : { _id: id_restaurante, "mesas._id": mesaLibre._id };
+        const updateField = id_sucursal
+            ? { $set: { "sucursales.$[s].mesas.$[m].estado": "Reservada" } }
+            : { $set: { "mesas.$[m].estado": "Reservada" } };
+        const arrayFilters = id_sucursal
+            ? [{ "s._id": id_sucursal }, { "m._id": mesaLibre._id }]
+            : [{ "m._id": mesaLibre._id }];
+        await Restaurant.updateOne(updateQuery, updateField, { arrayFilters });
 
         res.status(201).json({
             success: true,
@@ -117,7 +169,7 @@ export const getMyReservations = async (req, res) => {
     try {
         const id_usuario = req.user.uid;
         const reservations = await Reservation.find({ id_usuario, activo: true })
-            .populate('id_restaurante', 'nombre direccion')
+            .populate('id_restaurante', 'nombre direccion sucursales')
             .sort({ fecha_reserva: 1 });
 
         res.status(200).json({
@@ -131,6 +183,78 @@ export const getMyReservations = async (req, res) => {
             message: "Error al obtener tu historial",
            
         });
+    }
+};
+
+/**
+ * GET - Disponibilidad de mesas para una fecha/hora específica
+ * Calcula en tiempo real qué mesas están libres consultando la colección Reservation
+ */
+export const getTablesAvailability = async (req, res) => {
+    try {
+        const { id_restaurante, fecha_reserva, id_sucursal } = req.query;
+
+        if (!id_restaurante || !fecha_reserva) {
+            return res.status(400).json({
+                success: false,
+                message: "Se requieren id_restaurante y fecha_reserva"
+            });
+        }
+
+        const dateToCheck = new Date(fecha_reserva);
+        if (isNaN(dateToCheck.getTime())) {
+            return res.status(400).json({ success: false, message: "fecha_reserva no es válida" });
+        }
+
+        const restaurant = await Restaurant.findOne({ _id: id_restaurante, activo: true });
+        if (!restaurant) {
+            return res.status(404).json({ success: false, message: "Restaurante no encontrado" });
+        }
+
+        let mesasBase;
+        if (id_sucursal) {
+            const sucursal = restaurant.sucursales.id(id_sucursal);
+            if (!sucursal) {
+                return res.status(404).json({ success: false, message: "Sucursal no encontrada" });
+            }
+            mesasBase = sucursal.mesas;
+        } else {
+            mesasBase = restaurant.mesas;
+        }
+
+        const ventanaInicio = new Date(dateToCheck.getTime() - RESERVATION_WINDOW_MS);
+        const ventanaFin = new Date(dateToCheck.getTime() + RESERVATION_WINDOW_MS);
+
+        const querySolapamiento = {
+            id_restaurante,
+            activo: true,
+            estado: { $in: ['Confirmada', 'Atendida'] },
+            fecha_reserva: { $gte: ventanaInicio, $lte: ventanaFin }
+        };
+        if (id_sucursal) querySolapamiento.id_sucursal = id_sucursal;
+
+        const reservasSolapadas = await Reservation.find(querySolapamiento).select('id_mesa');
+        const mesasOcupadas = new Set(reservasSolapadas.map(r => String(r.id_mesa)));
+
+        const mesas = mesasBase.map(m => ({
+            _id: m._id,
+            numero: m.numero,
+            capacidad: m.capacidad,
+            ubicacion: m.ubicacion,
+            estado: m.estado,
+            disponible: m.estado !== 'Mantenimiento' && !mesasOcupadas.has(String(m._id))
+        }));
+
+        const disponibles = mesas.filter(m => m.disponible).length;
+
+        res.status(200).json({
+            success: true,
+            total: mesas.length,
+            disponibles,
+            mesas
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Error al obtener disponibilidad de mesas" });
     }
 };
 
@@ -157,6 +281,29 @@ export const deleteReservation = async (req, res) => {
         reservation.activo = false;
         reservation.estado = 'Cancelada';
         await reservation.save();
+
+        const restaurant = await Restaurant.findById(reservation.id_restaurante).select('mesas sucursales');
+        if (restaurant) {
+            let mesaActual = null;
+            if (reservation.id_sucursal) {
+                const suc = restaurant.sucursales?.id(reservation.id_sucursal);
+                mesaActual = suc?.mesas?.id(reservation.id_mesa);
+            } else {
+                mesaActual = restaurant.mesas?.id(reservation.id_mesa);
+            }
+            if (mesaActual && mesaActual.estado === 'Reservada') {
+                const updateQuery = reservation.id_sucursal
+                    ? { _id: reservation.id_restaurante, "sucursales._id": reservation.id_sucursal, "sucursales.mesas._id": reservation.id_mesa }
+                    : { _id: reservation.id_restaurante, "mesas._id": reservation.id_mesa };
+                const updateField = reservation.id_sucursal
+                    ? { $set: { "sucursales.$[s].mesas.$[m].estado": "Disponible" } }
+                    : { $set: { "mesas.$[m].estado": "Disponible" } };
+                const arrayFilters = reservation.id_sucursal
+                    ? [{ "s._id": reservation.id_sucursal }, { "m._id": reservation.id_mesa }]
+                    : [{ "m._id": reservation.id_mesa }];
+                await Restaurant.updateOne(updateQuery, updateField, { arrayFilters });
+            }
+        }
 
         res.status(200).json({
             success: true,

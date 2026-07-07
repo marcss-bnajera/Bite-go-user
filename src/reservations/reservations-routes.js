@@ -8,13 +8,17 @@ import { checkValidators } from "../../middlewares/check-validators.js";
 import {
     getMyReservations,
     createReservation,
-    deleteReservation
+    deleteReservation,
+    getTablesAvailability
 } from "./reservations-controller.js";
 
 const router = Router();
 
 // GET - Obtener mis reservaciones
 router.get("/", validateJWT, getMyReservations);
+
+// GET - Disponibilidad de mesas para una fecha/hora específica
+router.get("/tables-availability", validateJWT, getTablesAvailability);
 
 // POST - Registrar nueva reservacion
 router.post("/", validateJWT, createReservation);

@@ -6,6 +6,7 @@ import { checkValidators } from "../../middlewares/check-validators.js";
 
 import {
     getOrdersByUser,
+    getOrderById,
     createOrder,
     deleteOrder
 } from './orders-controller.js';
@@ -16,6 +17,10 @@ import {
 const router = Router();
 
 router.get('/history', validateJWT, getOrdersByUser);
+router.get('/:id', validateJWT, [
+    param('id').isMongoId().withMessage('ID de pedido no válido'),
+    checkValidators
+], getOrderById);
 router.post('/', validateJWT, validateCreateOrder, createOrder);
 router.delete('/:id', validateJWT, [
     param('id').isMongoId().withMessage('ID de pedido no válido'),
