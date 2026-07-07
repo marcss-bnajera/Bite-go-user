@@ -7,18 +7,22 @@ import {
 import {
     createReview,
     getMyReviews,
-    getRestaurantReviews
+    getRestaurantReviews,
+    getEligibleForReview
 } from "./reviewsRatings-controller.js";
 
 const router = Router();
 
-// GET - Mis calificaciones (qué pedidos ya calificó el cliente)
+// GET - Mis calificaciones
 router.get("/", validateJWT, getMyReviews);
+
+// GET - Elementos calificables de un restaurante
+router.get("/eligible/:id_restaurante", validateJWT, validateRestaurantParam, getEligibleForReview);
 
 // GET - Calificaciones públicas de un restaurante
 router.get("/restaurant/:id_restaurante", validateRestaurantParam, getRestaurantReviews);
 
-// POST - Calificar un pedido entregado
+// POST - Calificar un pedido o reservación
 router.post("/", validateJWT, validateCreateReview, createReview);
 
 export default router;

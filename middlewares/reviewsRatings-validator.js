@@ -2,12 +2,16 @@ import { body, param } from 'express-validator';
 import { checkValidators } from './check-validators.js';
 
 /**
- * Validaciones para calificar un pedido
+ * Validaciones para calificar un pedido o reservación
  */
 export const validateCreateReview = [
     body('id_pedido')
-        .notEmpty().withMessage('El ID del pedido es obligatorio')
+        .optional({ nullable: true })
         .isMongoId().withMessage('ID de pedido no válido'),
+
+    body('id_reservacion')
+        .optional({ nullable: true })
+        .isMongoId().withMessage('ID de reservación no válido'),
 
     body('calificacion')
         .notEmpty().withMessage('La calificación es obligatoria')
@@ -17,6 +21,13 @@ export const validateCreateReview = [
         .optional({ nullable: true })
         .isString().withMessage('El comentario debe ser texto')
         .isLength({ max: 500 }).withMessage('El comentario no puede superar los 500 caracteres'),
+
+    body().custom((value) => {
+        if (!value.id_pedido && !value.id_reservacion) {
+            throw new Error('Debes enviar un id_pedido o un id_reservacion');
+        }
+        return true;
+    }),
 
     checkValidators
 ];
