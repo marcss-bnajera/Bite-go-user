@@ -13,7 +13,16 @@ const reviewRatingSchema = new Schema({
     id_pedido: {
         type: Schema.Types.ObjectId,
         ref: 'Order',
-        required: [true, 'El pedido es obligatorio']
+        default: null
+    },
+    id_reservacion: {
+        type: Schema.Types.ObjectId,
+        ref: 'Reservation',
+        default: null
+    },
+    id_sucursal: {
+        type: String,
+        default: ''
     },
     calificacion: {
         type: Number,
@@ -41,7 +50,14 @@ const reviewRatingSchema = new Schema({
     }
 });
 
-// Un usuario solo puede calificar un mismo pedido una vez
-reviewRatingSchema.index({ id_usuario: 1, id_pedido: 1 }, { unique: true });
+reviewRatingSchema.index(
+    { id_usuario: 1, id_pedido: 1 },
+    { unique: true, partialFilterExpression: { id_pedido: { $type: 'objectId' } } }
+);
+
+reviewRatingSchema.index(
+    { id_usuario: 1, id_reservacion: 1 },
+    { unique: true, partialFilterExpression: { id_reservacion: { $type: 'objectId' } } }
+);
 
 export default model('ReviewRating', reviewRatingSchema);
