@@ -3,10 +3,20 @@
 import { Schema, model } from 'mongoose';
 
 const userSchema = new Schema({
+    auth_id: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
     nombre: {
         type: String,
-        required: [true, 'El nombre es obligatorio'],
+        default: "Usuario",
         trim: true
+    },
+    username: {
+        type: String,
+        trim: true,
+        default: ""
     },
     email: {
         type: String,
@@ -17,8 +27,7 @@ const userSchema = new Schema({
     },
     password: {
         type: String,
-        required: [true, 'La contraseña es obligatoria'],
-        minlength: [8, 'La contraseña debe tener al menos 8 caracteres']
+        select: false
     },
     telefono: {
         type: String,
@@ -28,10 +37,15 @@ const userSchema = new Schema({
         type: String,
         trim: true
     },
-    dpi: {
-        type: String,
-        unique: true,
-    },
+    direcciones: [{
+        etiqueta: { type: String, trim: true, required: true },
+        direccion: { type: String, trim: true, required: true },
+        predeterminada: { type: Boolean, default: false }
+    }],
+    favoritos: [{
+        type: Schema.Types.ObjectId,
+        ref: 'Restaurant'
+    }],
     rol: {
         type: String,
         required: true,
@@ -42,6 +56,14 @@ const userSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Restaurant',
         default: null
+    },
+    foto_url: {
+        type: String,
+        default: ""
+    },
+    foto_public_id: {
+        type: String,
+        default: ""
     },
     activo: {
         type: Boolean,
