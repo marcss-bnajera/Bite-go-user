@@ -53,6 +53,10 @@ const orderSchema = new Schema({
         ref: 'Restaurant',
         required: [true, 'El restaurante es obligatorio']
     },
+    id_sucursal: {
+        type: String,
+        default: ''
+    },
     id_mesero_asignado: {
         type: Schema.Types.ObjectId,
         ref: 'User',
@@ -87,6 +91,30 @@ const orderSchema = new Schema({
         required: true,
         enum: ['Comer aquí', 'Domicilio', 'Para llevar'],
         default: 'Comer aquí'
+    },
+    metodo_pago: {
+        type: String,
+        enum: ['efectivo', 'tarjeta', ''],
+        default: ''
+    },
+    propina: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    fecha_programada: {
+        type: Date,
+        default: null
+    },
+    descuento_cupon: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    codigo_cupon: {
+        type: String,
+        trim: true,
+        default: ''
     },
     activo: {
         type: Boolean,

@@ -12,6 +12,10 @@ const reservationSchema = new Schema({
         ref: 'Restaurant',
         required: [true, 'El restaurante es obligatorio']
     },
+    id_sucursal: {
+        type: String,
+        default: ''
+    },
     id_mesa: {
         type: Schema.Types.ObjectId,
         required: [true, 'La mesa es obligatoria']
@@ -28,6 +32,10 @@ const reservationSchema = new Schema({
         type: String,
         enum: ['Confirmada', 'Atendida', 'Cancelada'],
         default: 'Confirmada'
+    },
+    asistio: {
+        type: Boolean,
+        default: false
     },
     activo: {
         type: Boolean,
