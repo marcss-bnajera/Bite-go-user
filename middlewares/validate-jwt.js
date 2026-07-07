@@ -51,6 +51,10 @@ export const validateJWT = (req, res, next) => {
         // El claim "role" del .NET se proyecta al campo "rol" esperado por el resto del código
         req.user = {
             uid: decoded.sub,
+            email: decoded.email || '',
+            nombre: decoded.name || '',
+            apellido: decoded.surname || '',
+            username: decoded.username || '',
             rol: decoded.role,
             jti: decoded.jti,
             iat: decoded.iat,
