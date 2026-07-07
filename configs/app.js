@@ -19,6 +19,8 @@ import ordersRoutes from "../src/orders/orders-routes.js";
 import categoriesRoutes from "../src/categories/categories-routes.js";
 import itemsRoutes from "../src/items/items-routes.js";
 import reviewsRatingsRoutes from "../src/reviewsRatings/reviewsRatings-routes.js";
+import couponsRoutes from "../src/coupons/coupons-routes.js";
+import notificationsRoutes from "../src/notifications/notifications-routes.js";
 import { errorHandler } from '../middlewares/handle-errors.js';
 
 const BASE_URL = '/bite-and-go/v1';
@@ -46,6 +48,8 @@ const routes = (app) => {
     app.use(`${BASE_URL}/categories`, categoriesRoutes);
     app.use(`${BASE_URL}/items`, itemsRoutes);
     app.use(`${BASE_URL}/reviewsRatings`, reviewsRatingsRoutes);
+    app.use(`${BASE_URL}/coupons`, couponsRoutes);
+    app.use(`${BASE_URL}/notifications`, notificationsRoutes);
     app.use(errorHandler);
 }
 
