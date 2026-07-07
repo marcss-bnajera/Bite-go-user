@@ -278,7 +278,6 @@ export const deleteReservation = async (req, res) => {
             });
         }
 
-        reservation.activo = false;
         reservation.estado = 'Cancelada';
         await reservation.save();
 

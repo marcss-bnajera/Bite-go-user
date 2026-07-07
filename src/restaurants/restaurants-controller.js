@@ -1,5 +1,6 @@
 import Restaurant from "./restaurants-model.js";
 import Product from "../products/products-model.js";
+import Category from "../categories/categories-model.js";
 
 /**
  * GET 
@@ -15,8 +16,26 @@ export const getRestaurants = async (req, res) => {
         if (categoria) query.categoria_gastronomica = categoria;
 
         if (search) {
-            const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            query.nombre = { $regex: escaped, $options: "i" };
+            const trimmed = search.trim();
+            const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const nameRegex = { $regex: escaped, $options: "i" };
+
+            const matchingCategoryIds = await Category.distinct("_id", {
+                activo: true,
+                nombre: nameRegex
+            });
+
+            const restaurantsWithCategoryProducts = await Product.distinct("id_restaurante", {
+                activo: true,
+                categoria: { $in: matchingCategoryIds }
+            });
+
+            query.$or = [
+                { nombre: nameRegex },
+                { categoria_gastronomica: nameRegex },
+                { "direccion.texto": nameRegex },
+                { _id: { $in: restaurantsWithCategoryProducts } }
+            ];
         }
 
         if (categoria_producto) {

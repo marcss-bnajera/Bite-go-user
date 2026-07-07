@@ -9,11 +9,16 @@ import { createNotification } from "../notifications/notifications-controller.js
  * Función puente para Leandro (UserService -> AdminService)
  * Usando fetch nativo de Node 18
  */
+const INTER_SERVICE_SECRET = process.env.INTER_SERVICE_SECRET || '';
+
 const notifyInventoryReduction = async (items, id_restaurante, id_sucursal) => {
     try {
         const response = await fetch(`http://admin-service:3002/bite-and-go/v1/inventory/reduce`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Internal-Secret': INTER_SERVICE_SECRET
+            },
             body: JSON.stringify({ items, id_restaurante, id_sucursal: id_sucursal || '' })
         });
         const data = await response.json();
@@ -28,7 +33,10 @@ const notifyInventoryRestoration = async (items, id_restaurante, id_sucursal) =>
     try {
         const response = await fetch(`http://admin-service:3002/bite-and-go/v1/inventory/restore`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Internal-Secret': INTER_SERVICE_SECRET
+            },
             body: JSON.stringify({ items, id_restaurante, id_sucursal: id_sucursal || '' })
         });
         const data = await response.json();
@@ -173,7 +181,26 @@ export const createOrder = async (req, res) => {
             id_empleado_asignado = repartidor._id;
         }
 
-        // 2. Cálculo de total y validación de productos (Lógica extendida)
+        // 2. Verificar stock antes de crear el pedido
+        try {
+            const stockCheck = await fetch(`http://admin-service:3002/bite-and-go/v1/inventory/check`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Internal-Secret': INTER_SERVICE_SECRET
+                },
+                body: JSON.stringify({ items, id_restaurante, id_sucursal: id_sucursal || '' })
+            });
+            const stockData = await stockCheck.json();
+            if (!stockData.success) {
+                const msg = stockData.faltantes?.join('; ') || "No hay suficiente inventario para este pedido";
+                return res.status(400).json({ success: false, message: msg });
+            }
+        } catch (e) {
+            console.error("Error verificando stock:", e.message);
+        }
+
+        // 3. Cálculo de total y validación de productos (Lógica extendida)
         let totalCalculado = 0;
         for (const item of items) {
             const productoOriginal = await Product.findById(item.id_producto);
@@ -191,7 +218,7 @@ export const createOrder = async (req, res) => {
             totalCalculado += (item.precio_historico + precioExtras) * item.cantidad;
         }
 
-        // 3. Creación del objeto de orden unificado
+        // 4. Creación del objeto de orden unificado
         const order = new Order({
             id_usuario_cliente,
             id_restaurante,
@@ -222,7 +249,7 @@ export const createOrder = async (req, res) => {
             id_pedido: order._id
         });
 
-        // 4. Notificación de inventario
+        // 5. Notificación de inventario
         await notifyInventoryReduction(items, id_restaurante, id_sucursal);
 
         res.status(201).json({
@@ -291,7 +318,7 @@ export const deleteOrder = async (req, res) => {
 
         const order = await Order.findByIdAndUpdate(
             id,
-            { activo: false, estado: 'Cancelado' },
+            { estado: 'Cancelado' },
             { new: true }
         );
 
