@@ -2,8 +2,16 @@
 import Reservation from "./reservations-model.js";
 import Restaurant from "../restaurants/restaurants-model.js";
 
+// Ventana de tiempo que bloquea una mesa alrededor de una reserva (misma ventana que usa Bite-go-admin)
+const RESERVATION_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 horas
+
 /**
  * POST - Crear una nueva reservación con lógica de disponibilidad
+ *
+ * Antes, una reservación marcaba la mesa como 'Reservada' para siempre (solo se
+ * liberaba si el propio cliente cancelaba). Con el tiempo todas las mesas quedaban
+ * bloqueadas y ya no se podía asignar ninguna. Ahora la disponibilidad se calcula
+ * por ventana de tiempo alrededor de la fecha solicitada, igual que en el panel admin.
  */
 export const createReservation = async (req, res) => {
     try {
@@ -26,32 +34,66 @@ export const createReservation = async (req, res) => {
             });
         }
 
-        const table = restaurant.mesas.find(m =>
-            m.estado === 'Disponible' && m.capacidad >= cantidad_personas
-        );
+        const candidatas = restaurant.mesas
+            .filter(m => m.estado !== 'Mantenimiento' && m.capacidad >= cantidad_personas)
+            .sort((a, b) => a.capacidad - b.capacidad);
 
-        if (!table) {
+        if (candidatas.length === 0) {
             return res.status(400).json({
                 success: false,
                 message: "Lo sentimos, no hay mesas disponibles para esa cantidad de personas en este momento."
             });
         }
 
-        const newReservation = new Reservation({
+        const ventanaInicio = new Date(dateToReserve.getTime() - RESERVATION_WINDOW_MS);
+        const ventanaFin = new Date(dateToReserve.getTime() + RESERVATION_WINDOW_MS);
+
+        const reservasSolapadas = await Reservation.find({
+            id_restaurante,
+            activo: true,
+            estado: { $in: ['Confirmada', 'Atendida'] },
+            fecha_reserva: { $gte: ventanaInicio, $lte: ventanaFin }
+        }).select('id_mesa');
+
+        const mesasOcupadas = new Set(reservasSolapadas.map(r => String(r.id_mesa)));
+        const mesaLibre = candidatas.find(m => !mesasOcupadas.has(String(m._id)));
+
+        if (!mesaLibre) {
+            return res.status(400).json({
+                success: false,
+                message: "Lo sentimos, no hay mesas disponibles para esa cantidad de personas en ese horario."
+            });
+        }
+
+        const newReservation = await Reservation.create({
             id_usuario,
             id_restaurante,
-            id_mesa: table._id,
+            id_mesa: mesaLibre._id,
             fecha_reserva: dateToReserve,
             cantidad_personas,
             estado: 'Confirmada'
         });
 
-        await newReservation.save();
+        // Re-chequeo tras escribir: si otra reservación concurrente tomó la misma mesa
+        // y horario antes que esta, la más nueva pierde (evita doble reserva sin
+        // depender de transacciones de Mongo, que no siempre están disponibles).
+        const conflictoPrevio = await Reservation.findOne({
+            _id: { $ne: newReservation._id },
+            id_restaurante,
+            id_mesa: mesaLibre._id,
+            activo: true,
+            estado: { $in: ['Confirmada', 'Atendida'] },
+            fecha_reserva: { $gte: ventanaInicio, $lte: ventanaFin },
+            createdAt: { $lt: newReservation.createdAt }
+        });
 
-        await Restaurant.updateOne(
-            { "_id": id_restaurante, "mesas._id": table._id },
-            { "$set": { "mesas.$.estado": "Reservada" } }
-        );
+        if (conflictoPrevio) {
+            await Reservation.findByIdAndDelete(newReservation._id);
+            return res.status(409).json({
+                success: false,
+                message: "Esa mesa acaba de ser reservada por otro cliente para ese horario. Intenta con otro horario."
+            });
+        }
 
         res.status(201).json({
             success: true,
@@ -63,7 +105,7 @@ export const createReservation = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Error al procesar la reservación",
-           
+            error: error.message
         });
     }
 };
@@ -93,7 +135,10 @@ export const getMyReservations = async (req, res) => {
 };
 
 /**
- * DELETE - Cancelar una reservación y liberar la mesa
+ * DELETE - Cancelar una reservación
+ *
+ * Ya no hace falta "liberar" la mesa aparte: al quedar activo:false / estado:'Cancelada',
+ * createReservation deja de contarla como ocupación al calcular la ventana de tiempo.
  */
 export const deleteReservation = async (req, res) => {
     try {
@@ -113,20 +158,15 @@ export const deleteReservation = async (req, res) => {
         reservation.estado = 'Cancelada';
         await reservation.save();
 
-        await Restaurant.updateOne(
-            { "_id": reservation.id_restaurante, "mesas._id": reservation.id_mesa },
-            { "$set": { "mesas.$.estado": "Disponible" } }
-        );
-
         res.status(200).json({
             success: true,
-            message: "Reservación cancelada y mesa liberada correctamente."
+            message: "Reservación cancelada correctamente."
         });
     } catch (error) {
         res.status(500).json({
             success: false,
             message: "Error al cancelar la reservación",
-           
+            error: error.message
         });
     }
 };
