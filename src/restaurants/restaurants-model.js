@@ -41,6 +41,41 @@ const eventoSchema = new Schema({
     }
 });
 
+// Sucursal (Subdocumento)
+// Reutiliza mesaSchema para las mesas de cada sucursal
+const sucursalSchema = new Schema({
+    nombre: {
+        type: String,
+        trim: true
+    },
+    direccion: {
+        texto: { type: String, required: true },
+    },
+    latitud: {
+        type: Number
+    },
+    longitud: {
+        type: Number
+    },
+    horarios_atencion: {
+        type: String,
+        required: true
+    },
+    informacion_contacto: {
+        telefono: { type: String },
+        email: { type: String }
+    },
+    fotos_url: {
+        type: [String],
+        default: []
+    },
+    mesas: [mesaSchema],
+    activo: {
+        type: Boolean,
+        default: true
+    }
+});
+
 // Restaurante (Principal)
 // Esta es la coleccion principal
 // Contiene todos los documentos de mesas y eventos
@@ -65,6 +100,10 @@ const restaurantSchema = new Schema({
         type: [String],
         default: []
     },
+    foto_public_id: {
+        type: String,
+        default: null
+    },
     precio_promedio: {
         type: Number,
         required: true
@@ -77,6 +116,12 @@ const restaurantSchema = new Schema({
     mesas: [mesaSchema],
     // Array de eventos
     eventos: [eventoSchema],
+    // Sistema de sucursales
+    tiene_sucursales: {
+        type: Boolean,
+        default: false
+    },
+    sucursales: [sucursalSchema],
     activo: {
         type: Boolean,
         default: true
