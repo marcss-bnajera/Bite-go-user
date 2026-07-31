@@ -10,28 +10,27 @@ import { createNotification } from "../notifications/notifications-controller.js
  * Usando fetch nativo de Node 18
  */
 const INTER_SERVICE_SECRET = process.env.INTER_SERVICE_SECRET || '';
+const ADMIN_SERVICE_URL = process.env.ADMIN_SERVICE_URL || 'http://admin-service:3002';
 
 const notifyInventoryReduction = async (items, id_restaurante, id_sucursal) => {
-    try {
-        const response = await fetch(`http://admin-service:3002/bite-and-go/v1/inventory/reduce`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Internal-Secret': INTER_SERVICE_SECRET
-            },
-            body: JSON.stringify({ items, id_restaurante, id_sucursal: id_sucursal || '' })
-        });
-        const data = await response.json();
-        return data.success;
-    } catch (error) {
-        console.error("Error comunicando con Leandro (Admin):", error.message);
-        return false;
+    const response = await fetch(`${ADMIN_SERVICE_URL}/bite-and-go/v1/inventory/reduce`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Secret': INTER_SERVICE_SECRET
+        },
+        body: JSON.stringify({ items, id_restaurante, id_sucursal: id_sucursal || '' })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        throw new Error(data.message || "No se pudo descontar el stock del inventario");
     }
+    return data;
 };
 
 const notifyInventoryRestoration = async (items, id_restaurante, id_sucursal) => {
     try {
-        const response = await fetch(`http://admin-service:3002/bite-and-go/v1/inventory/restore`, {
+        const response = await fetch(`${ADMIN_SERVICE_URL}/bite-and-go/v1/inventory/restore`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -182,8 +181,9 @@ export const createOrder = async (req, res) => {
         }
 
         // 2. Verificar stock antes de crear el pedido
+        let stockData;
         try {
-            const stockCheck = await fetch(`http://admin-service:3002/bite-and-go/v1/inventory/check`, {
+            const stockCheck = await fetch(`${ADMIN_SERVICE_URL}/bite-and-go/v1/inventory/check`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -191,13 +191,17 @@ export const createOrder = async (req, res) => {
                 },
                 body: JSON.stringify({ items, id_restaurante, id_sucursal: id_sucursal || '' })
             });
-            const stockData = await stockCheck.json();
-            if (!stockData.success) {
-                const msg = stockData.faltantes?.join('; ') || "No hay suficiente inventario para este pedido";
-                return res.status(400).json({ success: false, message: msg });
-            }
+            stockData = await stockCheck.json();
         } catch (e) {
             console.error("Error verificando stock:", e.message);
+            return res.status(503).json({
+                success: false,
+                message: "No se pudo verificar el stock en este momento. Inténtalo de nuevo."
+            });
+        }
+        if (!stockData.success) {
+            const msg = stockData.faltantes?.join('; ') || "No hay suficiente inventario para este pedido";
+            return res.status(400).json({ success: false, message: msg });
         }
 
         // 3. Cálculo de total y validación de productos (Lógica extendida)
@@ -249,8 +253,16 @@ export const createOrder = async (req, res) => {
             id_pedido: order._id
         });
 
-        // 5. Notificación de inventario
-        await notifyInventoryReduction(items, id_restaurante, id_sucursal);
+        // 5. Reducción de stock — si falla, revertir la orden
+        try {
+            await notifyInventoryReduction(items, id_restaurante, id_sucursal);
+        } catch (stockError) {
+            await Order.findByIdAndDelete(order._id);
+            return res.status(400).json({
+                success: false,
+                message: stockError.message
+            });
+        }
 
         res.status(201).json({
             success: true,

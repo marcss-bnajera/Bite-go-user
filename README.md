@@ -181,6 +181,8 @@ Base URL: **`/bite-and-go/v1`** | Puerto: **`3001`**
 | `JWT_ISSUER` | `BiteGoAuthService` | ✅ | Mismo que auth-service |
 | `JWT_AUDIENCE` | `BiteGoServices` | ✅ | Mismo que auth-service |
 | `AUTH_SERVICE_URL` | — | ✅ | URL del auth-service |
+| `ADMIN_SERVICE_URL` | `http://admin-service:3002` | ✅ | URL del admin-service (inter-servicio: inventario) |
+| `INTER_SERVICE_SECRET` | — | ✅ | Secret compartido con admin-service para `/inventory/*` |
 | `ALLOWED_ORIGIN` | `*` | — | Orígenes CORS permitidos |
 | `RATE_LIMIT_MAX` | `10000` | — | Máx requests por ventana |
 | `CLOUDINARY_CLOUD_NAME` | — | ✅ | Cloud name |

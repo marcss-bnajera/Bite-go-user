@@ -4,13 +4,14 @@ import Order from "../orders/orders-model.js";
 import Product from "../products/products-model.js";
 
 const INTER_SERVICE_SECRET = process.env.INTER_SERVICE_SECRET || '';
+const ADMIN_SERVICE_URL = process.env.ADMIN_SERVICE_URL || 'http://admin-service:3002';
 
 /**
  * Función puente para Leandro (Misma lógica centralizada)
  */
 const notifyInventoryReduction = async (items, id_restaurante) => {
     try {
-        const response = await fetch(`http://admin-service:3002/bite-and-go/v1/inventory/reduce`, {
+        const response = await fetch(`${ADMIN_SERVICE_URL}/bite-and-go/v1/inventory/reduce`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
